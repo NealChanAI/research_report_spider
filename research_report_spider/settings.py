@@ -64,8 +64,21 @@ DOWNLOAD_DELAY = 3
 
 # Configure item pipelines
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
-ITEM_PIPELINES = {
-   'research_report_spider.pipelines.MysqlPipeline': 300,
+# 默认关闭写入 MySQL 的管道，这样即使本地没有启动 MySQL 服务，
+# 爬虫也能正常运行，只是不把数据保存到数据库。
+# 如需启用数据库写入，把下面一行的注释去掉即可。
+# ITEM_PIPELINES = {
+#    'research_report_spider.pipelines.MysqlPipeline': 300,
+# }
+
+# 将抓取结果导出为 CSV 文件
+# 文件名为 reports.csv，保存在当前项目根目录下
+FEEDS = {
+    'reports.csv': {
+        'format': 'csv',
+        'encoding': 'utf-8-sig',  # 方便在 Excel 中打开不乱码
+        'overwrite': True,        # 每次运行覆盖旧文件
+    },
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)

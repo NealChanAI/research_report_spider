@@ -1,0 +1,4 @@
+scrapy
+selenium
+pymysql
+akshare
