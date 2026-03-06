@@ -44,6 +44,11 @@ if args.delay is None and (args.index or (args.start and args.end)):
     args.delay = 5
     print("大范围爬取，已自动设置请求间隔为 5 秒（可用 --delay 覆盖）")
 
+# 触发时间戳，用于导出文件名（格式 YYYYMMDD_HHMMSS，兼容 Windows）
+feed_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+os.environ["REPORT_FEED_TIMESTAMP"] = feed_ts
+print(f"导出文件: reports_{feed_ts}.csv")
+
 cmd = ['scrapy', 'crawl', 'report', '-a', f'pages={args.pages}', '-a', f'batch_size={args.batch_size}']
 if args.sec_codes:
     cmd.extend(['-a', f'sec_codes={args.sec_codes}'])

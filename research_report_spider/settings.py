@@ -72,12 +72,16 @@ DOWNLOAD_DELAY = 3
 # }
 
 # 将抓取结果导出为 CSV 文件
-# 文件名为 reports.csv，保存在当前项目根目录下
+# 文件名含触发时间戳，如 reports_20260304_153045.csv，避免多次运行互相覆盖
+import os
+from datetime import datetime
+
+_feed_ts = os.environ.get("REPORT_FEED_TIMESTAMP") or datetime.now().strftime("%Y%m%d_%H%M%S")
 FEEDS = {
-    'reports.csv': {
-        'format': 'csv',
-        'encoding': 'utf-8-sig',  # 方便在 Excel 中打开不乱码
-        'overwrite': True,        # 每次运行覆盖旧文件
+    f"reports_{_feed_ts}.csv": {
+        "format": "csv",
+        "encoding": "utf-8-sig",  # 方便在 Excel 中打开不乱码
+        "overwrite": True,        # 单次运行内覆盖同名文件
     },
 }
 
