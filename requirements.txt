@@ -1,7 +1,4 @@
 scrapy
 selenium
 pymysql
-<<<<<<< HEAD
 akshare
-=======
->>>>>>> dd0978c (a)

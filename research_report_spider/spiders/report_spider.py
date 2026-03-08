@@ -8,6 +8,7 @@ from selenium import webdriver
 
 from research_report_spider.common import operation
 from research_report_spider.items import ResearchReportSpiderItem
+from research_report_spider.settings import FILES_STORE
 
 
 def get_csi500_codes():
@@ -76,6 +77,11 @@ class ReportSpider(scrapy.Spider):
         self.pages = int(pages) if pages else 4
         self.auto_paginate = bool(start_date and end_date) or len(self.sec_code_batches) > 1
 
+        # 启动时打印爬取范围，便于了解进度
+        logging.info("[爬取范围] 日期: %s ~ %s | 股票批次数: %d | 每批最多页数: %s",
+                     self.start_date, self.end_date, len(self.sec_code_batches),
+                     "自动翻页" if self.auto_paginate else str(self.pages))
+
     def _batch_codes(self, codes_str):
         """将股票代码字符串按 batch_size 分批"""
         if not codes_str:
@@ -87,9 +93,14 @@ class ReportSpider(scrapy.Spider):
         return batches
 
     def start_requests(self):
+        logging.info("[登录态] 正在启动 Chrome 获取 Cookie，用于访问研报接口……")
         cookie = self.get_cookies()
+        logging.info("[登录态] Cookie 获取成功，开始请求研报列表")
 
-        for sec_batch in self.sec_code_batches:
+        for batch_idx, sec_batch in enumerate(self.sec_code_batches):
+            if len(self.sec_code_batches) > 1:
+                logging.info("[批次 %d/%d] 当前股票代码: %s", batch_idx + 1, len(self.sec_code_batches),
+                             (sec_batch[:50] + "…") if len(sec_batch) > 50 else sec_batch or "全部")
             if self.auto_paginate:
                 # 大范围爬取：只请求第 1 页，parse 中按需请求后续页
                 pages_to_request = [1]
@@ -127,19 +138,24 @@ class ReportSpider(scrapy.Spider):
 
     def parse(self, response):
         page = response.meta.get('page')
-        logging.info('正在抓取第{0}页'.format(page))
+        logging.info("[列表页] 正在抓取第 %d 页（日期 %s ~ %s）", page, self.start_date, self.end_date)
         result = json.loads(response.text)
 
         message = result['message']
         if message != 'success':
-            logging.info('message为：{0},请求失败！'.format(message))
+            logging.warning("[列表页] 接口返回异常，message=%s，本页请求失败", message)
             return
 
         data_all = result['data']['list']
+        logging.info("[列表页] 第 %d 页共返回 %d 条研报", page, len(data_all))
 
         # 大范围爬取时：若本页满 40 条则继续请求下一页
         if response.meta.get("auto_paginate") and len(data_all) >= 40:
+            logging.info("[列表页] 本页已满 40 条，将继续请求第 %d 页", page + 1)
             yield self._build_next_page_request(response, page + 1)
+
+        new_count = 0
+        skip_count = 0
         for info in data_all:
             data = info['data']
             report_id = data['id']
@@ -149,9 +165,11 @@ class ReportSpider(scrapy.Spider):
             # id判断
             is_ar_id = operation.get_article_id(report_id)
             if is_ar_id:
-                logging.info('id:{0}已经存在'.format(is_ar_id))
+                skip_count += 1
+                logging.debug("[去重] 研报 id=%s 已存在，跳过", report_id)
                 continue
 
+            new_count += 1
             content = data['abstractText']
             if content:
                 content = content.replace('\u3000', '').strip()
@@ -159,9 +177,11 @@ class ReportSpider(scrapy.Spider):
                 content = content
             stock_code_info = data['stockInfo']
             if stock_code_info is None:
-                stock_code = None
+                stock_code = ''
             else:
                 stock_code = stock_code_info['stockId']
+            # 保证股票代码为字符串，避免 CSV/Excel 当数字处理丢失前导零
+            stock_code = str(stock_code) if stock_code not in (None, '') else ''
 
             file_name = '{0}-{1}.pdf'.format(stock_code, title)
             org_dt = data['publishTime'].split('T')
@@ -175,7 +195,6 @@ class ReportSpider(scrapy.Spider):
             item = ResearchReportSpiderItem()
             # 作为id，唯一主键
             item['report_id'] = report_id
-            # 股票代码
             item['stock_code'] = stock_code
             # 股票名称
             item['stock_name'] = stock_name
@@ -199,10 +218,16 @@ class ReportSpider(scrapy.Spider):
             item['pdf_link'] = [data['s3Url']]
             # 文件名
             item['filename'] = filename
-            # 文件存储路径
-            item['save_path'] = "H-hezudao/Research_Report{0}".format(filename)
+            # 文件存储路径（与 FILES_STORE 一致，便于 CSV 中记录实际保存位置）
+            item['save_path'] = "{0}{1}".format(
+                FILES_STORE.rstrip("/") + "/" if FILES_STORE else "",
+                filename.lstrip("/"),
+            )
 
             yield item
+
+        if new_count or skip_count:
+            logging.info("[列表页] 第 %d 页处理完成：新增 %d 条，跳过重复 %d 条", page, new_count, skip_count)
 
     def get_cookies(self):
         # Chrome 无头浏览器模式（Chrome 在 Windows 上更常见，Selenium 支持更好）
@@ -212,6 +237,7 @@ class ReportSpider(scrapy.Spider):
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
+        logging.info("[登录态] 正在启动 Chrome 无头浏览器……")
         driver = webdriver.Chrome(options=chrome_options)
 
         url = 'https://robo.datayes.com/v2/fastreport/company?subType=%E4%B8%8D%E9%99%90&induName='
@@ -223,5 +249,5 @@ class ReportSpider(scrapy.Spider):
         for cookie in cookie_list:
             cookie_dict[cookie['name']] = cookie['value']
         driver.quit()
-        logging.info('Chrome 已经 quit')
+        logging.info("[登录态] Chrome 已关闭，已获取 %d 个 Cookie", len(cookie_dict))
         return cookie_dict

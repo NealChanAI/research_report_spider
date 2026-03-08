@@ -15,7 +15,7 @@ class ResearchReportSpiderItem(scrapy.Item):
 
     # 作为id，唯一主键
     report_id = scrapy.Field()
-    # 股票代码
+    # 股票代码（应为字符串，避免前导零丢失）
     stock_code = scrapy.Field()
     # 股票名称
     stock_name = scrapy.Field()

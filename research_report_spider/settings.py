@@ -64,12 +64,15 @@ DOWNLOAD_DELAY = 3
 
 # Configure item pipelines
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
-# 默认关闭写入 MySQL 的管道，这样即使本地没有启动 MySQL 服务，
-# 爬虫也能正常运行，只是不把数据保存到数据库。
-# 如需启用数据库写入，把下面一行的注释去掉即可。
-# ITEM_PIPELINES = {
-#    'research_report_spider.pipelines.MysqlPipeline': 300,
-# }
+# 默认关闭写入 MySQL 的管道；PDF 下载管道已启用，将研报 PDF 保存到本地。
+# 如需启用数据库写入，在 ITEM_PIPELINES 中取消 MysqlPipeline 注释即可。
+ITEM_PIPELINES = {
+    'research_report_spider.pipelines.MyFilesPipeline': 200,
+    # 'research_report_spider.pipelines.MysqlPipeline': 300,
+}
+
+# PDF 下载保存根目录（相对项目根目录）；可改为绝对路径如 "H-hezudao/Research_Report"
+FILES_STORE = "pdf_downloads"
 
 # 将抓取结果导出为 CSV 文件
 # 文件名含触发时间戳，如 reports_20260304_153045.csv，避免多次运行互相覆盖

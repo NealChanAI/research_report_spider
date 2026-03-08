@@ -71,7 +71,8 @@ class MyFilesPipeline(FilesPipeline):
     def file_path(self, request, response=None, info=None):
         item = request.meta["item"]
         filename = item["filename"]
-        return filename
+        # 相对 FILES_STORE 的路径，去掉首字符 '/' 以兼容 Scrapy
+        return filename.lstrip("/") if isinstance(filename, str) else filename
 
     def item_completed(self, results, item, info):
         file_paths = [x['path'] for ok, x in results if ok]
